@@ -120,7 +120,7 @@ export default function LoginScreen() {
 
         {/* Rodapé */}
         <Text style={styles.footer}>
-          © {new Date().getFullYear()} Capone. Todos os direitos reservados.
+          © {new Date().getFullYear()} Capone. Todos os direitos reservados 21322.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
