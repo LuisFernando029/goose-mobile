@@ -342,8 +342,8 @@ export default function PedidosScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { padding: 16 },
-  title: { fontSize: 26, fontWeight: '700', marginBottom: 4, textAlign: 'center' },
+  scroll: { padding: 16, paddingTop: 40 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 4, textAlign: 'center' },
   subtitle: { fontSize: 14, textAlign: 'center', marginBottom: 20 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   statCard: {
