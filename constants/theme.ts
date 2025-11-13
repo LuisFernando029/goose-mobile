@@ -1,47 +1,76 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
+// theme.ts
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
-
+// Cores convertidas de oklch() para hexadecimal
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    background: '#FFFFFF', // --background
+    foreground: '#252525', // --foreground
+    card: '#FFFFFF', // --card
+    cardForeground: '#252525', // --card-foreground
+    primary: '#343434', // --primary
+    primaryForeground: '#FBFBFB', // --primary-foreground
+    secondary: '#F7F7F7', // --secondary
+    secondaryForeground: '#343434', // --secondary-foreground
+    muted: '#F7F7F7', // --muted
+    mutedForeground: '#8D8D8D', // --muted-foreground
+    accent: '#F7F7F7', // --accent
+    accentForeground: '#343434', // --accent-foreground
+    destructive: '#B24A3E', // --destructive
+    destructiveForeground: '#B24A3E', // --destructive-foreground
+    border: '#EAEAEA', // --border
+    input: '#EAEAEA', // --input
+    ring: '#B4B4B4', // --ring
+    sidebar: '#FBFBFB', // --sidebar
+    sidebarForeground: '#252525', // --sidebar-foreground
+    sidebarPrimary: '#343434', // --sidebar-primary
+    sidebarPrimaryForeground: '#FBFBFB', // --sidebar-primary-foreground
+    sidebarAccent: '#F7F7F7', // --sidebar-accent
+    sidebarAccentForeground: '#343434', // --sidebar-accent-foreground
+    sidebarBorder: '#EAEAEA', // --sidebar-border
+    sidebarRing: '#B4B4B4', // --sidebar-ring
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    background: '#252525', // --background
+    foreground: '#FBFBFB', // --foreground
+    card: '#252525', // --card
+    cardForeground: '#FBFBFB', // --card-foreground
+    primary: '#FBFBFB', // --primary
+    primaryForeground: '#343434', // --primary-foreground
+    secondary: '#444444', // --secondary
+    secondaryForeground: '#FBFBFB', // --secondary-foreground
+    muted: '#444444', // --muted
+    mutedForeground: '#B4B4B4', // --muted-foreground
+    accent: '#444444', // --accent
+    accentForeground: '#FBFBFB', // --accent-foreground
+    destructive: '#8C3B33', // --destructive
+    destructiveForeground: '#A85245', // --destructive-foreground
+    border: '#444444', // --border
+    input: '#444444', // --input
+    ring: '#707070', // --ring
+    sidebar: '#343434', // --sidebar
+    sidebarForeground: '#FBFBFB', // --sidebar-foreground
+    sidebarPrimary: '#655DFF', // --sidebar-primary
+    sidebarPrimaryForeground: '#FBFBFB', // --sidebar-primary-foreground
+    sidebarAccent: '#444444', // --sidebar-accent
+    sidebarAccentForeground: '#FBFBFB', // --sidebar-accent-foreground
+    sidebarBorder: '#444444', // --sidebar-border
+    sidebarRing: '#707070', // --sidebar-ring
   },
 };
 
+// Fontes padronizadas (com fallback seguro para iOS, Android e Web)
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    sans: 'System',
+    serif: 'Times New Roman',
+    rounded: 'SF Pro Rounded',
+    mono: 'Menlo',
   },
-  default: {
-    sans: 'normal',
+  android: {
+    sans: 'sans-serif',
     serif: 'serif',
-    rounded: 'normal',
+    rounded: 'sans-serif-rounded',
     mono: 'monospace',
   },
   web: {
@@ -49,5 +78,11 @@ export const Fonts = Platform.select({
     serif: "Georgia, 'Times New Roman', serif",
     rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  },
+  default: {
+    sans: 'system-ui',
+    serif: 'serif',
+    rounded: 'system-ui',
+    mono: 'monospace',
   },
 });
