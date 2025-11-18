@@ -3,15 +3,15 @@ import { useRouter } from "expo-router";
 import { Lock, User } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 export default function LoginScreen() {
@@ -41,7 +41,7 @@ export default function LoginScreen() {
       await AsyncStorage.setItem("user", JSON.stringify(data.user));
 
       // Redireciona
-      router.replace("/(tabs)");
+      router.replace("/cardapio");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -120,7 +120,7 @@ export default function LoginScreen() {
 
         {/* Rodapé */}
         <Text style={styles.footer}>
-          © {new Date().getFullYear()} Capone. Todos os direitos reservados 21322.
+          © {new Date().getFullYear()} Capone. Todos os direitos reservados.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
