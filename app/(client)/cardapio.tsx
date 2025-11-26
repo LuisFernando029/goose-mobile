@@ -1,17 +1,18 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Edit, Package, Plus, Search, Trash2 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 const { width } = Dimensions.get("window");
@@ -31,10 +32,16 @@ export default function ProdutosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    price: "",
+    isAvailable: true,
+  });
 
   useEffect(() => {
     fetchProducts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getAuthHeader = async () => {
@@ -67,60 +74,174 @@ export default function ProdutosPage() {
   };
 
   const fetchProducts = async () => {
-  try {
-    setLoading(true);
-    setError(null);
+    try {
+      setLoading(true);
+      setError(null);
 
-    console.log("=== FETCH PRODUCTS ===");
-    console.log("URL:", API_URL);
+      console.log("=== FETCH PRODUCTS ===");
+      console.log("URL:", API_URL);
 
-    const headers = await getAuthHeader();
-    console.log("Headers preparados");
+      const headers = await getAuthHeader();
+      console.log("Headers preparados");
 
-    const response = await fetch(API_URL, {
-      method: "GET",
-      headers,
+      const response = await fetch(API_URL, {
+        method: "GET",
+        headers,
+      });
+
+      console.log("Response status:", response.status);
+
+      if (response.status === 401) {
+        await handleAuthError();
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log("Error response:", errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Products loaded:", data.length);
+
+      const productsWithNumberPrice = data.map((p: any) => ({
+        ...p,
+        price: Number(p.price),
+      }));
+
+      setProducts(productsWithNumberPrice);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro desconhecido";
+      console.error("Erro ao carregar produtos:", errorMessage);
+      setError(errorMessage);
+
+      if (!errorMessage.includes("Token não encontrado")) {
+        Alert.alert("Erro ao carregar produtos", errorMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdd = () => {
+    setFormData({ name: "", price: "", isAvailable: true });
+    setEditingProduct(null);
+    setShowModal(true);
+  };
+
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
+    setFormData({
+      name: product.name,
+      price: product.price.toString(),
+      isAvailable: product.isAvailable,
     });
+    setShowModal(true);
+  };
 
-    console.log("Response status:", response.status);
-
-    if (response.status === 401) {
-      await handleAuthError();
+  const handleSave = async () => {
+    if (!formData.name.trim() || !formData.price) {
+      Alert.alert("Erro", "Preencha todos os campos obrigatórios");
       return;
     }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log("Error response:", errorText);
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const price = parseFloat(formData.price.replace(",", "."));
+    if (isNaN(price) || price <= 0) {
+      Alert.alert("Erro", "Preço inválido");
+      return;
     }
 
-    const data = await response.json();
-    console.log("Products loaded:", data.length);
+    try {
+      const headers = await getAuthHeader();
+      const url = editingProduct ? `${API_URL}/${editingProduct.id}` : API_URL;
+      const method = editingProduct ? "PATCH" : "POST"; // CORRIGIDO: PUT -> PATCH
 
-    // 🔥 Converte price para número
-    const productsWithNumberPrice = data.map((p: any) => ({
-      ...p,
-      price: Number(p.price),
-    }));
+      console.log("=== SALVANDO PRODUTO ===");
+      console.log("URL:", url);
+      console.log("Method:", method);
+      console.log("Body:", {
+        name: formData.name.trim(),
+        price: price,
+        isAvailable: formData.isAvailable,
+      });
 
-    setProducts(productsWithNumberPrice);
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Erro desconhecido";
-    console.error("Erro ao carregar produtos:", errorMessage);
-    setError(errorMessage);
-    
-    if (!errorMessage.includes("Token não encontrado")) {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          price: price,
+          isAvailable: formData.isAvailable,
+        }),
+      });
+
+      console.log("Response status:", response.status);
+
+      if (response.status === 401) {
+        await handleAuthError();
+        return;
+      }
+
+      const contentType = response.headers.get("content-type");
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log("Error response:", errorText);
+        Alert.alert(
+          "Erro",
+          `Erro ao salvar produto (${response.status})`
+        );
+        return;
+      }
+
+      if (contentType && contentType.includes("application/json")) {
+        const savedProduct = await response.json();
+        console.log("Produto salvo:", savedProduct);
+
+        if (editingProduct) {
+          setProducts(
+            products.map((p) =>
+              p.id === editingProduct.id
+                ? { ...savedProduct, price: Number(savedProduct.price) }
+                : p
+            )
+          );
+          Alert.alert("Sucesso", "Produto atualizado com sucesso");
+        } else {
+          setProducts([
+            ...products,
+            { ...savedProduct, price: Number(savedProduct.price) },
+          ]);
+          Alert.alert("Sucesso", "Produto adicionado com sucesso");
+        }
+
+        setShowModal(false);
+        setEditingProduct(null);
+        setFormData({ name: "", price: "", isAvailable: true });
+      } else {
+        const responseText = await response.text();
+        console.log("Resposta não-JSON:", responseText);
+        Alert.alert(
+          "Erro",
+          "Servidor retornou resposta inválida. Verifique a API."
+        );
+      }
+    } catch (error) {
+      console.error("Erro detalhado ao salvar:", error);
       Alert.alert(
-        "Erro ao carregar produtos",
-        errorMessage
+        "Erro",
+        error instanceof Error ? error.message : "Erro ao salvar produto"
       );
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingProduct(null);
+    setFormData({ name: "", price: "", isAvailable: true });
+  };
 
   const handleDelete = async (id: number) => {
     Alert.alert(
@@ -165,6 +286,10 @@ export default function ProdutosPage() {
     try {
       const headers = await getAuthHeader();
 
+      console.log("=== ATUALIZANDO DISPONIBILIDADE ===");
+      console.log("URL:", `${API_URL}/${product.id}`);
+      console.log("Body:", { isAvailable: !product.isAvailable });
+
       const response = await fetch(`${API_URL}/${product.id}`, {
         method: "PATCH",
         headers,
@@ -173,22 +298,39 @@ export default function ProdutosPage() {
         }),
       });
 
+      console.log("Response status:", response.status);
+
       if (response.status === 401) {
         await handleAuthError();
         return;
       }
 
-      if (response.ok) {
+      const contentType = response.headers.get("content-type");
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log("Error response:", errorText);
+        Alert.alert("Erro", "Não foi possível atualizar o produto");
+        return;
+      }
+
+      if (contentType && contentType.includes("application/json")) {
         const updated = await response.json();
         setProducts(
-          products.map((p) => (p.id === product.id ? updated : p))
+          products.map((p) =>
+            p.id === product.id
+              ? { ...updated, price: Number(updated.price) }
+              : p
+          )
         );
       } else {
-        Alert.alert("Erro", "Não foi possível atualizar o produto");
+        const responseText = await response.text();
+        console.log("Resposta não-JSON:", responseText);
+        Alert.alert("Erro", "Resposta inválida do servidor");
       }
     } catch (error) {
+      console.error("Erro ao atualizar disponibilidade:", error);
       Alert.alert("Erro", "Erro ao atualizar produto");
-      console.error(error);
     }
   };
 
@@ -228,7 +370,7 @@ export default function ProdutosPage() {
         <View style={styles.header}>
           <Text style={styles.title}>Gestão de Produtos</Text>
           <Text style={styles.subtitle}>Gerencie o catálogo de produtos</Text>
-          <TouchableOpacity style={styles.addButton}>
+          <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
             <Plus color="#FFF" size={18} />
             <Text style={styles.addButtonText}>Novo Produto</Text>
           </TouchableOpacity>
@@ -304,7 +446,10 @@ export default function ProdutosPage() {
               </View>
 
               <View style={styles.cardActions}>
-                <TouchableOpacity style={styles.editButton}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => handleEdit(product)}
+                >
                   <Edit color="#9CA3AF" size={18} />
                   <Text style={styles.editText}>Editar</Text>
                 </TouchableOpacity>
@@ -338,6 +483,85 @@ export default function ProdutosPage() {
           )}
         </View>
       </ScrollView>
+
+      {/* Modal de Adicionar/Editar */}
+      {showModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingProduct ? "Editar Produto" : "Novo Produto"}
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Nome do Produto *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: Pizza Margherita"
+                placeholderTextColor="#9CA3AF"
+                value={formData.name}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, name: text })
+                }
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Preço (R$) *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: 25.90"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="decimal-pad"
+                value={formData.price}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, price: text })
+                }
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() =>
+                  setFormData({
+                    ...formData,
+                    isAvailable: !formData.isAvailable,
+                  })
+                }
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    formData.isAvailable && styles.checkboxChecked,
+                  ]}
+                >
+                  {formData.isAvailable && (
+                    <Text style={styles.checkboxIcon}>✓</Text>
+                  )}
+                </View>
+                <Text style={styles.checkboxLabel}>Produto disponível</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={handleCloseModal}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveButton}
+                onPress={handleSave}
+              >
+                <Text style={styles.modalSaveText}>
+                  {editingProduct ? "Atualizar" : "Adicionar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -535,5 +759,106 @@ const styles = StyleSheet.create({
     color: "#52525B",
     marginTop: 4,
     fontSize: 13,
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalContent: {
+    backgroundColor: "#27272A",
+    borderRadius: 12,
+    padding: 20,
+    width: "100%",
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: "#3F3F46",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFF",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFF",
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: "#18181B",
+    color: "#FFF",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: "#52525B",
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: "#52525B",
+    marginRight: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: "#DC2626",
+    borderColor: "#DC2626",
+  },
+  checkboxIcon: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  checkboxLabel: {
+    color: "#FFF",
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+    gap: 10,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: "#3F3F46",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalCancelText: {
+    color: "#FFF",
+    fontWeight: "600",
+  },
+  modalSaveButton: {
+    flex: 1,
+    backgroundColor: "#DC2626",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalSaveText: {
+    color: "#FFF",
+    fontWeight: "600",
   },
 });

@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  Dimensions,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 type MesaStatus = 'available' | 'busy' | 'reserved';
@@ -257,17 +257,6 @@ const renderHeader = () => (
             { backgroundColor: statusColor.shadow }
           ]} />
 
-          {/* Botão de lock estilizado */}
-          <View style={[
-            styles.lockButton,
-            { 
-              backgroundColor: el.lock ? 'rgba(220, 38, 38, 0.9)' : 'rgba(255,255,255,0.15)',
-            }
-          ]}>
-            <Text style={styles.lockText}>
-              {el.lock ? '🔒' : '🔓'}
-            </Text>
-          </View>
 
           {/* Content com gradiente */}
           <View style={[
@@ -309,16 +298,7 @@ const renderHeader = () => (
           opacity: el.lock ? 0.8 : 1,
         }
       ]}>
-        <View style={[
-          styles.lockButton,
-          { 
-            backgroundColor: el.lock ? 'rgba(220, 38, 38, 0.9)' : 'rgba(255,255,255,0.15)',
-          }
-        ]}>
-          <Text style={styles.lockText}>
-            {el.lock ? '🔒' : '🔓'}
-          </Text>
-        </View>
+    
 
         <View style={styles.referenciaContent}>
           <Text style={styles.referenciaText}>{el.label}</Text>

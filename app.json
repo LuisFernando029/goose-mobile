@@ -1,5 +1,9 @@
 {
   "expo": {
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "ON_ERROR_RECOVERY"
+    },
     "name": "goose-mobile",
     "slug": "goose-mobile",
     "version": "1.0.0",

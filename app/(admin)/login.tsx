@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Lock, User } from "lucide-react-native";
 import React, { useState } from "react";
@@ -13,59 +14,61 @@ import {
   View
 } from "react-native";
 
-import { useAuth } from "../../context/AuthContext";
-
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuth(); // <-- IMPORTANTE
-
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    setLoading(true);
-    setError("");
+  setLoading(true);
+  setError("");
 
-    try {
-      const res = await fetch("http://192.168.0.20:4000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: senha }),
-      });
+  try {
+    // 🔥 Corrigindo URL inválida
+    const res = await fetch("http://192.168.0.20:4000/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password: senha }),
+    });
 
-      if (!res.ok) {
-        let msg = "Erro ao conectar ao servidor.";
-        try {
-          const errData = await res.json();
-          msg = errData.message || msg;
-        } catch {}
-        throw new Error(msg);
-      }
+    // Falha de conexão
+    if (!res.ok) {
+      let msg = "Erro ao conectar ao servidor.";
 
-      const data = await res.json();
+      try {
+        const errData = await res.json();
+        msg = errData.message || msg;
+      } catch {}
 
-      if (!data?.user || !data?.token) {
-        throw new Error("Resposta inválida do servidor.");
-      }
-
-      // 🔥 LOGIN CORRETO AGORA
-      await login(data.user);
-
-      if (data.user.role === "admin") {
-        router.replace("/(admin)");
-      } else {
-        router.replace("/(client)");
-      }
-      
-    } catch (err: any) {
-      setError(err.message || "Erro inesperado.");
-    } finally {
-      setLoading(false);
+      throw new Error(msg);
     }
-  };
 
+    const data = await res.json();
+
+    // 🔥 Valida retorno do backend
+    if (!data?.user || !data?.token) {
+      throw new Error("Resposta inválida do servidor.");
+    }
+
+    // Salva dados no AsyncStorage
+    await AsyncStorage.setItem("token", data.token);
+    await AsyncStorage.setItem("user", JSON.stringify(data.user));
+
+  
+    if (data.user.role === "admin") {
+      router.replace("/(admin)");
+    } else {
+      router.replace("/(client)");
+    }
+
+  } catch (err: any) {
+    setError(err.message || "Erro inesperado.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView

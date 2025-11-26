@@ -1,4 +1,4 @@
-// app/(client)/_layout.tsx
+// app/(admin)/_layout.tsx
 
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
