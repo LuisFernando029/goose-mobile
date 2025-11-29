@@ -1,24 +1,40 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+// app/_layout.tsx - CRITICO: Este arquivo está faltando!
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '../src/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const userType = await AsyncStorage.getItem('userType');
+      
+      // Se já está autenticado como admin, vai para o dashboard
+      if (userType === 'admin') {
+        router.replace('/(admin)/(tabs)');
+      }
+      // Se já está autenticado como cliente, vai para identificação
+      else if (userType === 'client') {
+        router.replace('/(client)/identificacao');
+      }
+      // Se não está autenticado, fica na tela inicial (index.tsx)
+    } catch (error) {
+      console.error('Erro ao verificar autenticação:', error);
+    }
+  };
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(admin)" />
+      <Stack.Screen name="(client)" />
+      <Stack.Screen name="auth" />
+    </Stack>
   );
 }
