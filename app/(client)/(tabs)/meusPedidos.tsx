@@ -45,7 +45,7 @@ interface Pedido {
   items: ItemPedido[];
 }
 
-const BASE_URL = "http://192.168.0.20:4000";
+const BASE_URL = "http://192.168.15.48:4000";
 
 export default function MeusPedidosScreen() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);

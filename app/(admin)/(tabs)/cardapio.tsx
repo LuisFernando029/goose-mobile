@@ -26,7 +26,7 @@ interface Produto {
   createdAt: string;
 }
 
-const BASE_URL = "http://192.168.0.20:4000";
+const BASE_URL = "http://192.168.15.48:4000";
 
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
