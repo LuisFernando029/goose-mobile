@@ -1,13 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Dimensions,
     ScrollView,
     StatusBar,
     StyleSheet,
     Text,
+    TouchableOpacity,
     View,
 } from 'react-native';
+import { RefreshCw } from 'lucide-react-native';
 
 type MesaStatus = 'available' | 'busy' | 'reserved';
 type TipoElemento = 'mesa' | 'referencia';
@@ -26,6 +30,7 @@ interface ElementoMapa {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const BASE_URL = "http://192.168.0.20:4000";
 
 // Cores refinadas
 const statusColors = {
@@ -50,6 +55,8 @@ export default function CanvasMesasVisualizacao() {
   const [elementos, setElementos] = useState<ElementoMapa[]>([]);
   const [scale] = useState(1);
   const [pan] = useState({ x: 0, y: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadElementos();
@@ -57,176 +64,97 @@ export default function CanvasMesasVisualizacao() {
 
   const loadElementos = async () => {
     try {
-      const saved = await AsyncStorage.getItem('canvas:elementos');
-      if (saved) {
-        setElementos(JSON.parse(saved));
-      } else {
-        // Dados organizados para não sobrepor - agora com mais elementos para testar o scroll vertical
-        setElementos([
-          { 
-            id: '1', 
-            tipo: 'mesa', 
-            label: 'Mesa 1', 
-            x: 50, y: 50, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'available', 
-            lock: false 
-          },
-          { 
-            id: '2', 
-            tipo: 'mesa', 
-            label: 'Mesa 2', 
-            x: 250, y: 50, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'busy', 
-            lock: false 
-          },
-          { 
-            id: '3', 
-            tipo: 'mesa', 
-            label: 'VIP', 
-            x: 450, y: 50, 
-            width: 180, height: 120, 
-            seats: 6, 
-            status: 'reserved', 
-            lock: true 
-          },
-          { 
-            id: '4', 
-            tipo: 'referencia', 
-            label: 'Entrada', 
-            x: 50, y: 200, 
-            width: 140, height: 60, 
-            lock: false 
-          },
-          { 
-            id: '5', 
-            tipo: 'referencia', 
-            label: 'Balcão', 
-            x: 250, y: 200, 
-            width: 180, height: 70, 
-            lock: false 
-          },
-          { 
-            id: '6', 
-            tipo: 'mesa', 
-            label: 'Mesa 4', 
-            x: 450, y: 200, 
-            width: 140, height: 90, 
-            seats: 2, 
-            status: 'available', 
-            lock: false 
-          },
-          { 
-            id: '7', 
-            tipo: 'mesa', 
-            label: 'Mesa 5', 
-            x: 50, y: 350, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'busy', 
-            lock: false 
-          },
-          { 
-            id: '8', 
-            tipo: 'mesa', 
-            label: 'Mesa 6', 
-            x: 250, y: 350, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'available', 
-            lock: false 
-          },
-          // Elementos adicionais para testar scroll vertical
-          { 
-            id: '9', 
-            tipo: 'mesa', 
-            label: 'Mesa 7', 
-            x: 50, y: 500, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'available', 
-            lock: false 
-          },
-          { 
-            id: '10', 
-            tipo: 'mesa', 
-            label: 'Mesa 8', 
-            x: 250, y: 500, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'busy', 
-            lock: false 
-          },
-          { 
-            id: '11', 
-            tipo: 'referencia', 
-            label: 'Cozinha', 
-            x: 450, y: 500, 
-            width: 140, height: 60, 
-            lock: false 
-          },
-          { 
-            id: '12', 
-            tipo: 'mesa', 
-            label: 'Mesa 9', 
-            x: 50, y: 650, 
-            width: 160, height: 100, 
-            seats: 4, 
-            status: 'reserved', 
-            lock: false 
-          },
-        ]);
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${BASE_URL}/tables`);
+
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar mesas: ${response.status}`);
       }
-    } catch (error) {
-      console.error('Erro ao carregar elementos:', error);
+
+      const data = await response.json();
+      
+      // Mapeia os dados da API para o formato do canvas
+      const elementosFormatados: ElementoMapa[] = data.map((item: any) => ({
+        id: item.id,
+        tipo: item.tipo || 'mesa',
+        label: item.label,
+        x: Number(item.x),
+        y: Number(item.y),
+        width: item.width ? Number(item.width) : undefined,
+        height: item.height ? Number(item.height) : undefined,
+        seats: item.seats ? Number(item.seats) : undefined,
+        status: item.status || 'available',
+        lock: item.lock || false,
+      }));
+
+      setElementos(elementosFormatados);
+
+      // Salva no AsyncStorage como cache
+      await AsyncStorage.setItem('canvas:elementos', JSON.stringify(elementosFormatados));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      setError(errorMessage);
+      Alert.alert("Erro", `Não foi possível carregar o mapa: ${errorMessage}`);
+      
+      // Tenta carregar do cache em caso de erro
+      try {
+        const cached = await AsyncStorage.getItem('canvas:elementos');
+        if (cached) {
+          setElementos(JSON.parse(cached));
+          Alert.alert("Aviso", "Carregado do cache local");
+        }
+      } catch (cacheError) {
+        console.error('Erro ao carregar cache:', cacheError);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   // Header compacto e bem organizado
-const renderHeader = () => (
-  <View style={styles.headerCards}>
-    <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-    
-    <View style={styles.cardsContainer}>
-      <View style={styles.mainCard}>
-        <Text style={styles.cardsTitle}>Mapa do Restaurante</Text>
-        <Text style={styles.cardsSubtitle}>Status ao vivo</Text>
-      </View>
+  const renderHeader = () => (
+    <View style={styles.headerCards}>
+      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
       
-      <View style={styles.statsCard}>
-        <View style={styles.statCardItem}>
-          <Text style={styles.statCardNumber}>{elementos.filter(e => e.tipo === 'mesa').length}</Text>
-          <Text style={styles.statCardLabel}>Mesas</Text>
+      <View style={styles.cardsContainer}>
+        <View style={styles.mainCard}>
+          <Text style={styles.cardsTitle}>Mapa do Restaurante</Text>
+          <Text style={styles.cardsSubtitle}>Status ao vivo</Text>
         </View>
-        <View style={styles.statCardDivider} />
-        <View style={styles.statCardItem}>
-          <Text style={styles.statCardNumber}>
-            {elementos.filter(e => e.tipo === 'mesa' && e.status === 'available').length}
-          </Text>
-          <Text style={styles.statCardLabel}>Livre</Text>
+        
+        <View style={styles.statsCard}>
+          <View style={styles.statCardItem}>
+            <Text style={styles.statCardNumber}>{elementos.filter(e => e.tipo === 'mesa').length}</Text>
+            <Text style={styles.statCardLabel}>Mesas</Text>
+          </View>
+          <View style={styles.statCardDivider} />
+          <View style={styles.statCardItem}>
+            <Text style={styles.statCardNumber}>
+              {elementos.filter(e => e.tipo === 'mesa' && e.status === 'available').length}
+            </Text>
+            <Text style={styles.statCardLabel}>Livre</Text>
+          </View>
         </View>
       </View>
-    </View>
 
-    <View style={styles.legendCards}>
-      <View style={styles.legendCard}>
-        <View style={[styles.legendCardDot, { backgroundColor: '#10b981' }]} />
-        <Text style={styles.legendCardText}>Disponível</Text>
-      </View>
-      <View style={styles.legendCard}>
-        <View style={[styles.legendCardDot, { backgroundColor: '#ef4444' }]} />
-        <Text style={styles.legendCardText}>Ocupada</Text>
-      </View>
-      <View style={styles.legendCard}>
-        <View style={[styles.legendCardDot, { backgroundColor: '#f59e0b' }]} />
-        <Text style={styles.legendCardText}>Reservada</Text>
+      <View style={styles.legendCards}>
+        <View style={styles.legendCard}>
+          <View style={[styles.legendCardDot, { backgroundColor: '#10b981' }]} />
+          <Text style={styles.legendCardText}>Disponível</Text>
+        </View>
+        <View style={styles.legendCard}>
+          <View style={[styles.legendCardDot, { backgroundColor: '#ef4444' }]} />
+          <Text style={styles.legendCardText}>Ocupada</Text>
+        </View>
+        <View style={styles.legendCard}>
+          <View style={[styles.legendCardDot, { backgroundColor: '#f59e0b' }]} />
+          <Text style={styles.legendCardText}>Reservada</Text>
+        </View>
       </View>
     </View>
-  </View>
-);
+  );
 
   const renderMesa = (el: ElementoMapa) => {
     const statusColor = statusColors[el.status!];
@@ -327,6 +255,28 @@ const renderHeader = () => (
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Carregando mapa...</Text>
+      </View>
+    );
+  }
+
+  if (error && elementos.length === 0) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.errorTitle}>Erro ao carregar mapa</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadElementos}>
+          <RefreshCw size={20} color="#FFF" />
+          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {renderHeader()}
@@ -334,55 +284,75 @@ const renderHeader = () => (
       {/* Área principal do canvas */}
       <View style={styles.mainContent}>
         <View style={styles.canvasHeader}>
-          <Text style={styles.canvasTitle}>Layout do Espaço</Text>
-          <Text style={styles.canvasSubtitle}>
-            {elementos.length} elementos no mapa • Role para explorar
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.canvasTitle}>Layout do Espaço</Text>
+            <Text style={styles.canvasSubtitle}>
+              {elementos.length} elementos no mapa • Role para explorar
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.refreshButton} 
+            onPress={loadElementos}
+            disabled={loading}
+          >
+            <RefreshCw size={18} color="#94a3b8" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.canvasWrapper}>
-          {/* ScrollView vertical para navegação geral */}
-          <ScrollView 
-            style={styles.verticalScroll}
-            showsVerticalScrollIndicator={true}
-          >
-            {/* ScrollView horizontal dentro do vertical */}
+          {elementos.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Nenhum elemento cadastrado</Text>
+              <Text style={styles.emptySubtext}>
+                Adicione mesas e referências para visualizar o mapa
+              </Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadElementos}>
+                <RefreshCw size={20} color="#FFF" />
+                <Text style={styles.retryButtonText}>Recarregar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
             <ScrollView 
-              style={styles.horizontalScroll}
-              horizontal={true}
-              showsHorizontalScrollIndicator={true}
-              contentContainerStyle={styles.canvasContentContainer}
+              style={styles.verticalScroll}
+              showsVerticalScrollIndicator={true}
             >
-              <View style={styles.canvas}>
-                {/* Grid de fundo */}
-                <View style={styles.gridOverlay} />
-                
-                <View 
-                  style={[
-                    styles.transformContainer,
-                    {
-                      transform: [
-                        { translateX: pan.x },
-                        { translateY: pan.y },
-                        { scale: scale }
-                      ],
-                    }
-                  ]}
-                >
-                  {elementos.map((el) => 
-                    el.tipo === 'mesa' ? renderMesa(el) : renderReferencia(el)
-                  )}
+              <ScrollView 
+                style={styles.horizontalScroll}
+                horizontal={true}
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.canvasContentContainer}
+              >
+                <View style={styles.canvas}>
+                  {/* Grid de fundo */}
+                  <View style={styles.gridOverlay} />
+                  
+                  <View 
+                    style={[
+                      styles.transformContainer,
+                      {
+                        transform: [
+                          { translateX: pan.x },
+                          { translateY: pan.y },
+                          { scale: scale }
+                        ],
+                      }
+                    ]}
+                  >
+                    {elementos.map((el) => 
+                      el.tipo === 'mesa' ? renderMesa(el) : renderReferencia(el)
+                    )}
+                  </View>
                 </View>
-              </View>
+              </ScrollView>
             </ScrollView>
-          </ScrollView>
+          )}
         </View>
       </View>
 
       {/* Rodapé */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          Toque e arraste para navegar • Atualizado agora
+          {error ? '⚠️ Dados do cache • ' : ''}Toque e arraste para navegar • Atualizado agora
         </Text>
       </View>
     </View>
@@ -394,77 +364,88 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a',
   },
-  header: {
-    backgroundColor: '#1e293b',
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCards: {
+    backgroundColor: '#0f172a',
     paddingTop: 50,
     paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    paddingHorizontal: 16,
   },
-  headerMain: {
+  cardsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    gap: 12,
     marginBottom: 16,
   },
-  headerTextContainer: {
+  mainCard: {
+    flex: 2,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  statsCard: {
     flex: 1,
-  },
-  headerTitle: {
-    color: '#f1f5f9',
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '400',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 4,
-  },
-  statItem: {
-    alignItems: 'flex-end',
-  },
-  statNumber: {
-    color: '#f8fafc',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  statLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  statusLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  legendItem: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  cardsTitle: {
+    color: '#f1f5f9',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 2,
   },
-  legendText: {
+  cardsSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  statCardItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statCardNumber: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  statCardLabel: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  statCardDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  legendCards: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 12,
+    borderRadius: 10,
+  },
+  legendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendCardDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendCardText: {
     color: '#cbd5e1',
     fontSize: 12,
     fontWeight: '500',
@@ -477,6 +458,9 @@ const styles = StyleSheet.create({
   canvasHeader: {
     marginBottom: 12,
     paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   canvasTitle: {
     color: '#e2e8f0',
@@ -488,6 +472,13 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 13,
     fontWeight: '400',
+  },
+  refreshButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   canvasWrapper: {
     flex: 1,
@@ -502,6 +493,56 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  loadingText: {
+    color: '#94a3b8',
+    marginTop: 12,
+    fontSize: 14,
+  },
+  errorTitle: {
+    color: '#ef4444',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    color: '#e2e8f0',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
   // ScrollView vertical (principal)
   verticalScroll: {
     flex: 1,
@@ -511,8 +552,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   canvasContentContainer: {
-    minWidth: 1000,  // Largura mínima para scroll horizontal
-    minHeight: 900,  // Altura aumentada para scroll vertical
+    minWidth: 1000,
+    minHeight: 900,
   },
   canvas: {
     width: '100%',
@@ -523,11 +564,6 @@ const styles = StyleSheet.create({
   gridOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
-    backgroundImage: `
-      linear-gradient(to right, rgba(30, 41, 59, 0.2) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(30, 41, 59, 0.2) 1px, transparent 1px)
-    `,
-    backgroundSize: '40px 40px',
   },
   transformContainer: {
     width: '100%',
@@ -663,86 +699,4 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
-  headerCards: {
-  backgroundColor: '#0f172a',
-  paddingTop: 50,
-  paddingBottom: 16,
-  paddingHorizontal: 16,
-},
-cardsContainer: {
-  flexDirection: 'row',
-  gap: 12,
-  marginBottom: 16,
-},
-mainCard: {
-  flex: 2,
-  backgroundColor: 'rgba(255,255,255,0.05)',
-  padding: 16,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-},
-statsCard: {
-  flex: 1,
-  backgroundColor: 'rgba(255,255,255,0.05)',
-  padding: 8,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.1)',
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-cardsTitle: {
-  color: '#f1f5f9',
-  fontSize: 18,
-  fontWeight: '600',
-  marginBottom: 2,
-},
-cardsSubtitle: {
-  color: '#94a3b8',
-  fontSize: 12,
-  fontWeight: '400',
-},
-statCardItem: {
-  flex: 1,
-  alignItems: 'center',
-},
-statCardNumber: {
-  color: '#f8fafc',
-  fontSize: 16,
-  fontWeight: '700',
-  marginBottom: 2,
-},
-statCardLabel: {
-  color: '#94a3b8',
-  fontSize: 10,
-  fontWeight: '500',
-},
-statCardDivider: {
-  width: 1,
-  height: 30,
-  backgroundColor: 'rgba(255,255,255,0.1)',
-},
-legendCards: {
-  flexDirection: 'row',
-  justifyContent: 'space-around',
-  backgroundColor: 'rgba(255,255,255,0.03)',
-  padding: 12,
-  borderRadius: 10,
-},
-legendCard: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 8,
-},
-legendCardDot: {
-  width: 12,
-  height: 12,
-  borderRadius: 6,
-},
-legendCardText: {
-  color: '#cbd5e1',
-  fontSize: 12,
-  fontWeight: '500',
-},
 });

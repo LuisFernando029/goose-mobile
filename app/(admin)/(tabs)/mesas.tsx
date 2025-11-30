@@ -6,160 +6,305 @@ import {
   ScrollView, 
   TouchableOpacity,
   Alert,
-  Dimensions 
+  Dimensions,
+  ActivityIndicator,
+  Modal,
+  TextInput
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Users, Clock, CheckCircle, ArrowLeft } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Users, Clock, CheckCircle, ArrowLeft, RefreshCw, X, UserCheck } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
 interface Mesa {
-  id: number;
-  numero: number;
-  capacidade: number;
-  status: "disponivel" | "ocupada" | "reservada";
-  cliente?: string;
-  cpf?: string;
-  horarioReserva?: string;
+  id: string;
+  label: string;
+  seats: number;
+  status: "available" | "busy" | "reserved";
+  tipo: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  lock: boolean;
+  reservedBy?: string;
 }
 
-const MESAS_STORAGE_KEY = '@Capone:mesas';
+const BASE_URL = "http://192.168.0.20:4000";
 
 export default function ClientMesasScreen() {
   const router = useRouter();
   const [mesas, setMesas] = useState<Mesa[]>([]);
-  const [clientData, setClientData] = useState<any>(null);
-  const [mesaReservada, setMesaReservada] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Modal states
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
+  const [customerName, setCustomerName] = useState('');
+  const [loadingModal, setLoadingModal] = useState(false);
 
-  // Carregar dados do cliente e mesas
   useEffect(() => {
-    loadClientData();
     loadMesas();
   }, []);
 
-  // Carregar dados do cliente
-  const loadClientData = async () => {
-    try {
-      const data = await AsyncStorage.getItem('clientData');
-      if (data) {
-        const client = JSON.parse(data);
-        setClientData(client);
-        setMesaReservada(client.mesa);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar dados do cliente:', error);
-    }
-  };
-
-  // Carregar mesas do AsyncStorage
   const loadMesas = async () => {
     try {
-      const storedMesas = await AsyncStorage.getItem(MESAS_STORAGE_KEY);
-      if (storedMesas) {
-        setMesas(JSON.parse(storedMesas));
-      } else {
-        // Se não há mesas, usa as iniciais e salva
-        const mesasIniciais: Mesa[] = [
-          { id: 1, numero: 1, capacidade: 4, status: "disponivel" },
-          { id: 2, numero: 2, capacidade: 2, status: "disponivel" },
-          { id: 3, numero: 3, capacidade: 2, status: "ocupada" },
-          { id: 4, numero: 4, capacidade: 6, status: "disponivel" },
-          { id: 5, numero: 5, capacidade: 6, status: "ocupada" },
-          { id: 6, numero: 6, capacidade: 4, status: "disponivel" },
-          { id: 7, numero: 7, capacidade: 2, status: "disponivel" },
-          { id: 8, numero: 8, capacidade: 8, status: "disponivel" },
-        ];
-        await AsyncStorage.setItem(MESAS_STORAGE_KEY, JSON.stringify(mesasIniciais));
-        setMesas(mesasIniciais);
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${BASE_URL}/tables`);
+
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar mesas: ${response.status}`);
       }
-    } catch (error) {
-      console.error('Erro ao carregar mesas:', error);
+
+      const data = await response.json();
+      
+      // Filtra apenas elementos do tipo 'mesa'
+      const mesasData = data.filter((item: Mesa) => item.tipo === 'mesa');
+      
+      setMesas(mesasData);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      setError(errorMessage);
+      Alert.alert("Erro", `Não foi possível carregar as mesas: ${errorMessage}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Função para reservar mesa
-  const reservarMesa = async (mesaNumero: number) => {
-    if (!clientData) return;
+  const openReservaModal = (mesa: Mesa) => {
+    setSelectedMesa(mesa);
+    setCustomerName('');
+    setModalVisible(true);
+  };
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setSelectedMesa(null);
+    setCustomerName('');
+  };
+
+  const confirmarReserva = async () => {
+    if (!selectedMesa || !customerName.trim()) {
+      Alert.alert('Erro', 'Nome do cliente é obrigatório');
+      return;
+    }
+
+    try {
+      setLoadingModal(true);
+
+      const response = await fetch(`${BASE_URL}/tables/${selectedMesa.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          status: 'reserved',
+          reservedBy: customerName.trim()
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao reservar mesa');
+      }
+
+      const updatedMesa = await response.json();
+
+      // Atualiza localmente
+      setMesas(prev =>
+        prev.map(mesa =>
+          mesa.id === selectedMesa.id
+            ? { ...mesa, status: 'reserved', reservedBy: customerName.trim() }
+            : mesa
+        )
+      );
+
+      Alert.alert('Sucesso', `Mesa reservada para ${customerName.trim()}`);
+      closeModal();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      Alert.alert('Erro', `Não foi possível reservar a mesa: ${errorMessage}`);
+    } finally {
+      setLoadingModal(false);
+    }
+  };
+
+  const cancelarReserva = async (mesa: Mesa) => {
     Alert.alert(
-      'Confirmar Reserva',
-      `Deseja reservar a Mesa ${mesaNumero}?`,
+      'Cancelar Reserva',
+      `Deseja cancelar a reserva da ${mesa.label}?`,
       [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Reservar', 
+        { text: 'Não', style: 'cancel' },
+        {
+          text: 'Sim',
+          style: 'destructive',
           onPress: async () => {
             try {
-              // Atualizar a mesa no AsyncStorage
-              const storedMesas = await AsyncStorage.getItem(MESAS_STORAGE_KEY);
-              if (storedMesas) {
-                const mesasData: Mesa[] = JSON.parse(storedMesas);
-                const mesaIndex = mesasData.findIndex((m: Mesa) => m.numero === mesaNumero);
-                
-                if (mesaIndex !== -1) {
-                  mesasData[mesaIndex] = {
-                    ...mesasData[mesaIndex],
-                    status: 'reservada',
-                    cliente: clientData.nome,
-                    cpf: clientData.cpf,
-                    horarioReserva: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                  };
-                  
-                  await AsyncStorage.setItem(MESAS_STORAGE_KEY, JSON.stringify(mesasData));
-                  setMesas(mesasData);
-                }
+              const response = await fetch(`${BASE_URL}/tables/${mesa.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  status: 'available',
+                  reservedBy: null
+                }),
+              });
+
+              if (!response.ok) {
+                throw new Error('Erro ao cancelar reserva');
               }
 
-              // Atualizar clientData com a mesa reservada
-              const updatedClientData = {
-                ...clientData,
-                mesa: mesaNumero
-              };
-              
-              await AsyncStorage.setItem('clientData', JSON.stringify(updatedClientData));
-              setClientData(updatedClientData);
-              setMesaReservada(mesaNumero);
-
-              Alert.alert(
-                'Reserva Confirmada!', 
-                `Mesa ${mesaNumero} reservada para ${clientData.nome}`,
-                [
-                  { 
-                    text: 'Ver Cardápio', 
-                    onPress: () => router.push('/(client)/cardapio')
-                  },
-                  { text: 'Continuar Navegando', style: 'cancel' }
-                ]
+              // Atualiza localmente
+              setMesas(prev =>
+                prev.map(m =>
+                  m.id === mesa.id
+                    ? { ...m, status: 'available', reservedBy: undefined }
+                    : m
+                )
               );
-            } catch (error) {
-              console.error('Erro ao reservar mesa:', error);
-              Alert.alert('Erro', 'Não foi possível reservar a mesa. Tente novamente.');
+
+              Alert.alert('Sucesso', 'Reserva cancelada com sucesso');
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+              Alert.alert('Erro', `Não foi possível cancelar a reserva: ${errorMessage}`);
             }
-          }
+          },
         },
       ]
     );
   };
 
-  // Função para obter informações do status
+  const ocuparMesa = async (mesa: Mesa) => {
+    Alert.alert(
+      'Confirmar Ocupação',
+      `Marcar ${mesa.label} como ocupada?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            try {
+              const response = await fetch(`${BASE_URL}/tables/${mesa.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  status: 'busy'
+                }),
+              });
+
+              if (!response.ok) {
+                throw new Error('Erro ao ocupar mesa');
+              }
+
+              // Atualiza localmente
+              setMesas(prev =>
+                prev.map(m =>
+                  m.id === mesa.id
+                    ? { ...m, status: 'busy' }
+                    : m
+                )
+              );
+
+              Alert.alert('Sucesso', `${mesa.label} agora está ocupada`);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+              Alert.alert('Erro', `Não foi possível ocupar a mesa: ${errorMessage}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const liberarMesa = async (mesa: Mesa) => {
+    Alert.alert(
+      'Liberar Mesa',
+      `Deseja liberar a ${mesa.label}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Liberar',
+          onPress: async () => {
+            try {
+              const response = await fetch(`${BASE_URL}/tables/${mesa.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  status: 'available',
+                  reservedBy: null
+                }),
+              });
+
+              if (!response.ok) {
+                throw new Error('Erro ao liberar mesa');
+              }
+
+              // Atualiza localmente
+              setMesas(prev =>
+                prev.map(m =>
+                  m.id === mesa.id
+                    ? { ...m, status: 'available', reservedBy: undefined }
+                    : m
+                )
+              );
+
+              Alert.alert('Sucesso', `${mesa.label} liberada com sucesso`);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+              Alert.alert('Erro', `Não foi possível liberar a mesa: ${errorMessage}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getStatusInfo = (status: string) => {
     switch (status) {
-      case 'disponivel':
+      case 'available':
         return { color: '#22C55E', text: 'Disponível', icon: CheckCircle };
-      case 'ocupada':
+      case 'busy':
         return { color: '#DC2626', text: 'Ocupada', icon: Users };
-      case 'reservada':
+      case 'reserved':
         return { color: '#EAB308', text: 'Reservada', icon: Clock };
       default:
         return { color: '#9CA3AF', text: status, icon: Users };
     }
   };
 
-  // Calcular estatísticas (se necessário para exibição)
-  const mesasDisponiveis = mesas.filter((m) => m.status === "disponivel").length;
-  const mesasOcupadas = mesas.filter((m) => m.status === "ocupada").length;
-  const mesasReservadas = mesas.filter((m) => m.status === "reservada").length;
+  const mesasDisponiveis = mesas.filter((m) => m.status === "available").length;
+  const mesasOcupadas = mesas.filter((m) => m.status === "busy").length;
+  const mesasReservadas = mesas.filter((m) => m.status === "reserved").length;
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#DC2626" />
+        <Text style={styles.loadingText}>Carregando mesas...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Users color="#DC2626" size={48} />
+        <Text style={styles.errorTitle}>Erro ao carregar mesas</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadMesas}>
+          <RefreshCw size={20} color="#FFF" />
+          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -174,91 +319,193 @@ export default function ClientMesasScreen() {
             <Text style={styles.backText}>Voltar</Text>
           </TouchableOpacity>
 
-          <Text style={styles.title}>Escolha sua Mesa</Text>
-          <Text style={styles.subtitle}>
-            {clientData?.nome} - Cliente
-          </Text>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.title}>Gestão de Mesas</Text>
+              <Text style={styles.subtitle}>
+                Administre reservas e ocupação
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={loadMesas}
+              disabled={loading}
+            >
+              <RefreshCw size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Info Cliente */}
-        <View style={styles.clientInfoCard}>
-          <View style={styles.clientInfo}>
-            <Text style={styles.clientName}>{clientData?.nome}</Text>
-            <Text style={styles.clientCpf}>CPF: {clientData?.cpf}</Text>
+        {/* Estatísticas */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{mesasDisponiveis}</Text>
+            <Text style={styles.statLabel}>Disponíveis</Text>
           </View>
-          {mesaReservada && (
-            <View style={styles.reservaBadge}>
-              <Text style={styles.reservaText}>Mesa {mesaReservada}</Text>
-            </View>
-          )}
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#DC2626' }]}>{mesasOcupadas}</Text>
+            <Text style={styles.statLabel}>Ocupadas</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#EAB308' }]}>{mesasReservadas}</Text>
+            <Text style={styles.statLabel}>Reservadas</Text>
+          </View>
         </View>
 
         {/* Lista de Mesas */}
         <View style={styles.mesasContainer}>
-          <Text style={styles.sectionTitle}>Mesas Disponíveis</Text>
+          <Text style={styles.sectionTitle}>Mesas do Restaurante</Text>
           <Text style={styles.sectionSubtitle}>
-            Toque em uma mesa disponível para reservar
+            Gerencie as mesas e suas reservas
           </Text>
           
-          <View style={styles.mesasGrid}>
-            {mesas.map((mesa) => {
-              const statusInfo = getStatusInfo(mesa.status);
-              const StatusIcon = statusInfo.icon;
-              
-              return (
-                <TouchableOpacity
-                  key={mesa.id}
-                  style={[
-                    styles.mesaCard,
-                    mesa.status === 'disponivel' && styles.mesaDisponivel,
-                    mesa.status === 'ocupada' && styles.mesaOcupada,
-                    mesa.status === 'reservada' && styles.mesaReservada,
-                  ]}
-                  onPress={() => mesa.status === 'disponivel' && reservarMesa(mesa.numero)}
-                  disabled={mesa.status !== 'disponivel'}
-                >
-                  <View style={styles.mesaHeader}>
-                    <Text style={styles.mesaNumero}>Mesa {mesa.numero}</Text>
-                    <StatusIcon size={16} color={statusInfo.color} />
-                  </View>
-                  
-                  <Text style={styles.mesaCapacidade}>
-                    <Users size={14} color="#9CA3AF" /> {mesa.capacidade} lugares
-                  </Text>
-                  
-                  <Text style={[styles.mesaStatus, { color: statusInfo.color }]}>
-                    {statusInfo.text}
-                  </Text>
-
-                  {mesa.cliente && (
-                    <Text style={styles.mesaCliente}>
-                      Reservada para: {mesa.cliente}
+          {mesas.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Users color="#9CA3AF" size={40} />
+              <Text style={styles.emptyText}>Nenhuma mesa cadastrada</Text>
+            </View>
+          ) : (
+            <View style={styles.mesasGrid}>
+              {mesas.map((mesa) => {
+                const statusInfo = getStatusInfo(mesa.status);
+                const StatusIcon = statusInfo.icon;
+                
+                return (
+                  <View
+                    key={mesa.id}
+                    style={[
+                      styles.mesaCard,
+                      mesa.status === 'available' && styles.mesaDisponivel,
+                      mesa.status === 'busy' && styles.mesaOcupada,
+                      mesa.status === 'reserved' && styles.mesaReservada,
+                    ]}
+                  >
+                    <View style={styles.mesaHeader}>
+                      <Text style={styles.mesaNumero}>{mesa.label}</Text>
+                      <StatusIcon size={16} color={statusInfo.color} />
+                    </View>
+                    
+                    <Text style={styles.mesaCapacidade}>
+                      <Users size={14} color="#9CA3AF" /> {mesa.seats} lugares
                     </Text>
-                  )}
+                    
+                    <Text style={[styles.mesaStatus, { color: statusInfo.color }]}>
+                      {statusInfo.text}
+                    </Text>
 
-                  {mesa.status === 'disponivel' && (
-                    <TouchableOpacity
-                      style={styles.reservarButton}
-                      onPress={() => reservarMesa(mesa.numero)}
-                    >
-                      <Text style={styles.reservarButtonText}>Reservar Mesa</Text>
-                    </TouchableOpacity>
-                  )}
+                    {mesa.reservedBy && (
+                      <View style={styles.reservedByContainer}>
+                        <UserCheck size={14} color="#EAB308" />
+                        <Text style={styles.reservedByText}>{mesa.reservedBy}</Text>
+                      </View>
+                    )}
 
-                  {mesa.status === 'reservada' && mesa.numero === mesaReservada && (
-                    <TouchableOpacity
-                      style={styles.verCardapioButton}
-                      onPress={() => router.push('/(client)/cardapio')}
-                    >
-                      <Text style={styles.verCardapioButtonText}>Ver Cardápio</Text>
-                    </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    {/* Botões baseados no status */}
+                    {mesa.status === 'available' && (
+                      <TouchableOpacity
+                        style={styles.reservarButton}
+                        onPress={() => openReservaModal(mesa)}
+                      >
+                        <Text style={styles.reservarButtonText}>Reservar Mesa</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {mesa.status === 'reserved' && (
+                      <View style={styles.actionsContainer}>
+                        <TouchableOpacity
+                          style={styles.ocuparButton}
+                          onPress={() => ocuparMesa(mesa)}
+                        >
+                          <Text style={styles.ocuparButtonText}>Cliente Chegou</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.cancelarButton}
+                          onPress={() => cancelarReserva(mesa)}
+                        >
+                          <Text style={styles.cancelarButtonText}>Cancelar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {mesa.status === 'busy' && (
+                      <TouchableOpacity
+                        style={styles.liberarButton}
+                        onPress={() => liberarMesa(mesa)}
+                      >
+                        <Text style={styles.liberarButtonText}>Liberar Mesa</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {/* Modal de Reserva */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Reservar {selectedMesa?.label}
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
+                <X size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>Nome do Cliente *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Digite o nome do cliente"
+                placeholderTextColor="#9CA3AF"
+                value={customerName}
+                onChangeText={setCustomerName}
+                autoFocus
+              />
+
+              {selectedMesa && (
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalInfoText}>
+                    Mesa: <Text style={styles.modalInfoBold}>{selectedMesa.label}</Text>
+                  </Text>
+                  <Text style={styles.modalInfoText}>
+                    Capacidade: <Text style={styles.modalInfoBold}>{selectedMesa.seats} pessoas</Text>
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={closeModal}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={confirmarReserva}
+                disabled={loadingModal}
+              >
+                {loadingModal ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Confirmar Reserva</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -267,6 +514,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#18181B',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scroll: {
     flex: 1,
@@ -285,6 +536,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -295,41 +551,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9CA3AF',
   },
-  clientInfoCard: {
+  refreshButton: {
+    padding: 8,
     backgroundColor: '#27272A',
-    margin: 16,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#3F3F46',
+  },
+  statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  statCard: {
+    backgroundColor: '#27272A',
+    borderRadius: 10,
+    padding: 14,
+    width: width * 0.28,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
     alignItems: 'center',
   },
-  clientInfo: {
-    flex: 1,
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#22C55E',
   },
-  clientName: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  clientCpf: {
+  statLabel: {
+    fontSize: 12,
     color: '#9CA3AF',
-    fontSize: 14,
-  },
-  reservaBadge: {
-    backgroundColor: '#EAB308',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  reservaText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '600',
+    marginTop: 4,
   },
   mesasContainer: {
     padding: 16,
@@ -356,7 +608,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#3F3F46',
   },
   mesaDisponivel: {
@@ -364,7 +616,6 @@ const styles = StyleSheet.create({
   },
   mesaOcupada: {
     borderColor: '#DC2626',
-    opacity: 0.6,
   },
   mesaReservada: {
     borderColor: '#EAB308',
@@ -388,34 +639,202 @@ const styles = StyleSheet.create({
   mesaStatus: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 4,
-  },
-  mesaCliente: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontStyle: 'italic',
     marginBottom: 8,
+  },
+  reservedByContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(234, 179, 8, 0.1)',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+    gap: 6,
+  },
+  reservedByText: {
+    color: '#EAB308',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionsContainer: {
+    gap: 8,
   },
   reservarButton: {
     backgroundColor: '#2563EB',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 6,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   reservarButtonText: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
   },
-  verCardapioButton: {
+  ocuparButton: {
     backgroundColor: '#22C55E',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 6,
     alignItems: 'center',
-    marginTop: 8,
   },
-  verCardapioButtonText: {
+  ocuparButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cancelarButton: {
+    backgroundColor: '#DC2626',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  cancelarButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  liberarButton: {
+    backgroundColor: '#22C55E',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  liberarButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loadingText: {
+    color: '#9CA3AF',
+    marginTop: 12,
+    fontSize: 14,
+  },
+  errorTitle: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  emptyText: {
+    color: '#9CA3AF',
+    marginTop: 8,
+    fontSize: 14,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#27272A',
+    borderRadius: 16,
+    width: width * 0.9,
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3F3F46',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+    marginBottom: 8,
+  },
+  modalInput: {
+    backgroundColor: '#18181B',
+    color: '#FFF',
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  modalInfo: {
+    marginTop: 16,
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(37, 99, 235, 0.2)',
+  },
+  modalInfoText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  modalInfoBold: {
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#3F3F46',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+  },
+  modalCancelText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#2563EB',
+  },
+  modalConfirmText: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',

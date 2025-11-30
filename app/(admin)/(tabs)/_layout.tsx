@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { House, Package, Users, ChefHat, BarChart3 } from 'lucide-react-native';
+import { LayoutGrid, Utensils, ShoppingBag, ClipboardList, BarChart3, MapPin } from 'lucide-react-native';
 
 export default function AdminTabLayout() {
   return (
@@ -17,28 +17,28 @@ export default function AdminTabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <House size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <LayoutGrid size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="mesas"
         options={{
           title: 'Mesas',
-          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <LayoutGrid size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="cardapio"
         options={{
           title: 'Cardápio',
-          tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Utensils size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="pedidos"
         options={{
           title: 'Pedidos',
-          tabBarIcon: ({ color, size }) => <ChefHat size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <ClipboardList size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -46,6 +46,13 @@ export default function AdminTabLayout() {
         options={{
           title: 'Relatórios',
           tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="mapa"
+        options={{
+          title: 'Mapa',
+          tabBarIcon: ({ color, size }) => <MapPin size={size} color={color} />,
         }}
       />
     </Tabs>

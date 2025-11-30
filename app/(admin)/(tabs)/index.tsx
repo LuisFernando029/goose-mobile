@@ -53,21 +53,15 @@ export default function AdminHomeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Limpa TODOS os dados
-              await AsyncStorage.multiRemove([
-                'userType', 
-                'userToken', 
-                'userData',
-                'clientData',
-                '@Capone:mesas'
-              ]);
+              // Obtém todas as chaves do AsyncStorage
+              const allKeys = await AsyncStorage.getAllKeys();
               
-              // Limpa localStorage diretamente
-              if (typeof window !== 'undefined') {
-                localStorage.clear();
+              // Remove todas as chaves
+              if (allKeys.length > 0) {
+                await AsyncStorage.multiRemove(allKeys);
               }
               
-              // Navegação correta para a tela inicial
+              // Navegação para a tela inicial
               router.replace('/');
             } catch (error) {
               console.error('Erro ao fazer logout:', error);
