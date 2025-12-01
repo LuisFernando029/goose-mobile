@@ -29,7 +29,7 @@ interface Mesa {
   reservedBy?: string;
 }
 
-const BASE_URL = "http://192.168.15.48:4000";
+const BASE_URL = "http://192.168.15.68:4000";
 
 export default function ClientMesasScreen() {
   const router = useRouter();
@@ -186,7 +186,7 @@ export default function ClientMesasScreen() {
                 setMesaAtual(mesa);
 
                 // 5. Redireciona para o cardápio
-                router.push('/(client)/cardapio');
+                router.push('/(client)/(tabs)/cardapio');
               } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
                 Alert.alert('Erro', `Não foi possível trocar de mesa: ${errorMessage}`);
@@ -210,7 +210,7 @@ export default function ClientMesasScreen() {
           },
           {
             text: 'Ver Cardápio',
-            onPress: () => router.push('/(client)/cardapio')
+            onPress: () => router.push('/(client)/(tabs)/cardapio')
           }
         ]
       );
@@ -263,7 +263,7 @@ export default function ClientMesasScreen() {
               setMesaAtual(mesa);
 
               // Redireciona automaticamente para o cardápio
-              router.push('/(client)/cardapio');
+              router.push('/(client)/(tabs)/cardapio');
             } catch (err) {
               const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
               Alert.alert('Erro', `Não foi possível ocupar a mesa: ${errorMessage}`);

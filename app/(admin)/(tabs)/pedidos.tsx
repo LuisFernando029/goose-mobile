@@ -74,7 +74,7 @@ interface Produto {
   quantity: number;
 }
 
-const BASE_URL = "http://192.168.15.48:4000";
+const BASE_URL = "http://192.168.15.68:4000";
 
 const CATEGORIAS = [
   { nome: 'Lanches', key: 'lanches', icon: Sandwich, color: '#DC2626' },

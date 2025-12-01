@@ -30,7 +30,7 @@ interface ElementoMapa {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const BASE_URL = "http://192.168.15.48:4000";
+const BASE_URL = "http://192.168.15.68:4000";
 
 // Cores refinadas
 const statusColors = {

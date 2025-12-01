@@ -1,454 +1,477 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  StyleSheet, 
-  Text, 
   View, 
-  ScrollView, 
-  TouchableOpacity,
-  Alert,
-  Dimensions,
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  FlatList, 
+  TextInput, 
   ActivityIndicator,
-  FlatList
+  StatusBar,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { 
   ArrowLeft, 
-  RefreshCw, 
-  TrendingUp, 
+  Search, 
   TrendingDown, 
-  Minus, 
-  Brain, // Ícone representando a IA
-  Calendar,
-  AlertCircle
+  BrainCircuit,
+  AlertTriangle,
+  CheckCircle2,
+  Package,
+  X
 } from 'lucide-react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+// ------------------------------------------------------------------
+// 1. CONFIGURAÇÕES DE REDE
+// ------------------------------------------------------------------
+const MEU_IP = '192.168.15.68'; // <--- SEU IP
+const NODE_PORT = '4000';       
+const ML_PORT = '8000';         
 
-// Interface para a resposta da sua Machine Learning
-interface PredictionResult {
-  productId: string;
-  productName: string;
-  currentStock: number;
-  predictedSales: number; // O que a IA acha que vai vender
-  confidence: number; // 0 a 100 (certeza da IA)
-  trend: 'up' | 'down' | 'stable'; // Tendência comparado à média
-  suggestedAction: string; // Ex: "Comprar mais", "Fazer promoção"
+const API_NODE_URL = `http://${MEU_IP}:${NODE_PORT}`; 
+const API_ML_URL =   `http://${MEU_IP}:${ML_PORT}`;
+
+// ------------------------------------------------------------------
+// 2. O SEU TEMA EXATO (Copiado da constants)
+// ------------------------------------------------------------------
+const theme = {
+  colors: {
+    background: '#09090b', // zinc-950
+    surface: '#18181b',    // zinc-900
+    surfaceHighlight: '#27272a', // zinc-800
+    
+    primary: '#ef4444',    // red-500
+    primaryDark: '#b91c1c', // red-700
+    
+    text: '#fafafa',       // zinc-50
+    textSecondary: '#a1a1aa', // zinc-400
+    
+    border: '#27272a',     // zinc-800
+    
+    success: '#22c55e',    // green-500
+    warning: '#eab308',    // yellow-500
+    danger: '#ef4444',     // red-500
+  },
+  fonts: {
+    regular: 'Inter_400Regular',
+    medium: 'Inter_500Medium',
+    semiBold: 'Inter_600SemiBold',
+    bold: 'Inter_700Bold',
+  }
+};
+
+interface StockItem {
+  id: string;
+  name: string;
+  category: string;
+  current: number;
+  min: number;
+  predictedSales?: number; 
+  projectedStock?: number; 
+  aiStatus?: 'ok' | 'low' | 'critical';
 }
 
-const BASE_URL = "http://192.168.15.48:4000";
-
-export default function PredictionScreen() {
+export default function StockPredictionScreen() {
   const router = useRouter();
-  const [predictions, setPredictions] = useState<PredictionResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<string>('');
+  
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedItem, setSelectedItem] = useState<StockItem | null>(null);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  
+  const [loadingData, setLoadingData] = useState(true);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [retraining, setRetraining] = useState(false);
 
-  useEffect(() => {
-    loadPredictions();
-  }, []);
-
-  const loadPredictions = async () => {
+  // --- BUSCA DADOS ---
+  const fetchProductsFromDB = async () => {
+    setLoadingData(true);
     try {
-      setLoading(true);
-      
-      // MOCK PARA TESTE VISUAL (Remova isso quando conectar na API real)
-      // Simula um delay de processamento da IA
-      /*
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const mockData: PredictionResult[] = [
-        { productId: '1', productName: 'Coca-Cola 2L', currentStock: 50, predictedSales: 120, confidence: 92, trend: 'up', suggestedAction: 'Repor Urgente' },
-        { productId: '2', productName: 'Heineken 600ml', currentStock: 200, predictedSales: 180, confidence: 85, trend: 'stable', suggestedAction: 'Estoque OK' },
-        { productId: '3', productName: 'Porção de Fritas', currentStock: 80, predictedSales: 40, confidence: 78, trend: 'down', suggestedAction: 'Reduzir Compra' },
-        { productId: '4', productName: 'Água Mineral', currentStock: 10, predictedSales: 60, confidence: 95, trend: 'up', suggestedAction: 'Repor Urgente' },
-      ];
-      setPredictions(mockData);
-      setLastUpdate(new Date().toLocaleTimeString());
-      setLoading(false);
-      return; 
-      */
-      // FIM DO MOCK
-
-      // --- INTEGRAÇÃO REAL COM MACHINE LEARNING ---
-      // A rota '/predict' deve acionar seu modelo Python/Node
-      const response = await fetch(`${BASE_URL}/predict`, {
-        method: 'POST', // Geralmente POST para enviar dados de contexto (data, clima, etc)
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetDate: new Date().toISOString().split('T')[0], // Previsão para hoje/amanhã
-          context: 'sales_forecast'
-        })
-      });
-
-      if (!response.ok) throw new Error('Falha ao obter previsões da IA');
-
+      const response = await fetch(`${API_NODE_URL}/products`); 
+      if (!response.ok) throw new Error('Falha na API Node');
       const data = await response.json();
-      setPredictions(data);
-      setLastUpdate(new Date().toLocaleTimeString());
+      
+      let itemsArray = Array.isArray(data) ? data : (data.data || []);
 
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
-      Alert.alert("Erro na IA", `Não foi possível gerar previsões: ${errorMessage}`);
+      const formattedItems: StockItem[] = itemsArray.map((item: any) => ({
+        id: String(item.id || item._id),
+        name: item.name || item.nome || 'Sem Nome',
+        category: item.category?.name || item.category || 'Geral',
+        current: Number(item.quantity || item.stock || 0),
+        min: Number(item.minStock || 10),
+      }));
+
+      setStockItems(formattedItems);
+      if (formattedItems.length > 0) fetchAIPredictions(formattedItems);
+
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Erro', 'Não foi possível carregar o estoque.');
     } finally {
-      setLoading(false);
+      setLoadingData(false);
     }
   };
 
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'up': return <TrendingUp size={20} color="#22C55E" />;
-      case 'down': return <TrendingDown size={20} color="#DC2626" />;
-      default: return <Minus size={20} color="#EAB308" />;
-    }
+  // --- IA PREDICT ---
+  const fetchAIPredictions = async (items: StockItem[]) => {
+    setLoadingAI(true);
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toISOString().split('T')[0];
+
+      const updatedItems = await Promise.all(items.map(async (item) => {
+        try {
+          const response = await fetch(`${API_ML_URL}/predict-stock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              target_date: dateStr,
+              product_id: parseInt(item.id) || 0,
+              product_name: item.name,
+              current_stock: item.current
+            })
+          });
+          
+          if (!response.ok) return item;
+          const data = await response.json();
+          
+          let status: 'ok' | 'low' | 'critical' = 'ok';
+          if (data.prediction.projected_stock_end_of_day < 0) status = 'critical';
+          else if (data.prediction.projected_stock_end_of_day < item.min) status = 'low';
+
+          return {
+            ...item,
+            predictedSales: data.prediction.estimated_sales,
+            projectedStock: data.prediction.projected_stock_end_of_day,
+            aiStatus: status
+          };
+        } catch { return item; }
+      }));
+      setStockItems(updatedItems);
+    } catch { } finally { setLoadingAI(false); }
   };
 
-  const getConfidenceColor = (score: number) => {
-    if (score >= 90) return '#22C55E'; // Alta confiança
-    if (score >= 70) return '#EAB308'; // Média confiança
-    return '#DC2626'; // Baixa confiança
+  // --- RE-TREINAR ---
+  const handleRetrain = async () => {
+    setRetraining(true);
+    try {
+      const response = await fetch(`${API_ML_URL}/retrain-model`, { method: 'POST' });
+      if (response.ok) {
+        Alert.alert('Sucesso', 'Inteligência atualizada com novos pedidos!');
+        fetchProductsFromDB();
+      } else {
+        Alert.alert('Erro', 'Falha ao treinar modelo.');
+      }
+    } catch { 
+      Alert.alert('Erro', 'Servidor Python parece offline.');
+    } finally { setRetraining(false); }
   };
 
-  if (loading) {
+  useEffect(() => { fetchProductsFromDB(); }, []);
+
+  const categories = ['Todos', ...new Set(stockItems.map(i => i.category))];
+  const filteredStock = useMemo(() => {
+    return stockItems.filter(item => {
+      const matchesCategory = selectedCategory === 'Todos' || item.category === selectedCategory;
+      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [stockItems, selectedCategory, searchQuery]);
+
+  // --- CARD DO ITEM ---
+  const renderItem = ({ item, index }: { item: StockItem, index: number }) => {
+    let statusColor = theme.colors.success;
+    let StatusIcon = CheckCircle2;
+    if (item.aiStatus === 'low') { statusColor = theme.colors.warning; StatusIcon = AlertTriangle; }
+    if (item.aiStatus === 'critical') { statusColor = theme.colors.danger; StatusIcon = TrendingDown; }
+
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
-        <Text style={styles.loadingText}>Processando dados...</Text>
-        <Text style={styles.loadingSubText}>Consultando modelo de Machine Learning</Text>
-      </View>
+      <Animated.View entering={FadeInDown.delay(index * 50).springify()}>
+        <TouchableOpacity 
+          style={styles.card} 
+          onPress={() => setSelectedItem(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardContent}>
+            {/* Ícone */}
+            <View style={[styles.iconBox, { backgroundColor: statusColor + '20' }]}>
+              <StatusIcon size={20} color={statusColor} />
+            </View>
+            
+            {/* Textos */}
+            <View style={{flex: 1, marginLeft: 12}}>
+              <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.cardSubtitle}>{item.category}</Text>
+            </View>
+
+            {/* Valores */}
+            <View style={{alignItems: 'flex-end'}}>
+              <Text style={styles.stockValue}>{item.current}</Text>
+              {loadingAI ? (
+                 <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <Text style={[styles.predictionText, { color: statusColor }]}>
+                  {item.predictedSales ? `-${item.predictedSales} prev.` : '--'}
+                </Text>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     );
-  }
+  };
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scroll}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={20} color="#9CA3AF" />
-            <Text style={styles.backText}>Voltar</Text>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
+      
+      {/* HEADER */}
+      <View style={styles.header}>
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft size={24} color={theme.colors.text} />
           </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Previsão IA</Text>
+            <Text style={styles.headerSubtitle}>Estoque Inteligente</Text>
+          </View>
+        </View>
 
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Previsão de Demanda</Text>
-              <View style={styles.aiBadge}>
-                <Brain size={14} color="#C4B5FD" />
-                <Text style={styles.subtitle}>
-                  Powered by AI • Atualizado às {lastUpdate}
+        {/* BOTÃO CÉREBRO (Estilo Botão Vermelho) */}
+        <TouchableOpacity 
+          onPress={handleRetrain} 
+          disabled={retraining}
+          style={styles.aiButton}
+        >
+          {retraining ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : (
+            <BrainCircuit size={22} color="#FFF" />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* SEARCH BAR */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Search size={20} color={theme.colors.textSecondary} />
+          <TextInput 
+            style={styles.searchInput}
+            placeholder="Buscar item..."
+            placeholderTextColor={theme.colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      </View>
+
+      {/* CATEGORIAS */}
+      <View style={{ height: 40, marginBottom: 16 }}>
+        <FlatList
+          horizontal
+          data={categories}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+          keyExtractor={item => item}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={[
+                styles.catPill, 
+                selectedCategory === item && styles.catPillActive
+              ]}
+              onPress={() => setSelectedCategory(item)}
+            >
+              <Text style={[
+                styles.catText, 
+                selectedCategory === item && styles.catTextActive
+              ]}>{item}</Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+
+      {/* LISTA */}
+      {loadingData ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Carregando dados...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredStock}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.centerBox}>
+              <Package size={40} color={theme.colors.textSecondary} />
+              <Text style={styles.emptyText}>Nenhum produto encontrado</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* MODAL BOTTOM SHEET */}
+      {selectedItem && (
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelectedItem(null)} />
+          <Animated.View entering={FadeInDown.springify().damping(15)} style={styles.modalContent}>
+            
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>{selectedItem.name}</Text>
+                <Text style={styles.modalCategory}>{selectedItem.category}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.closeIcon}>
+                <X size={24} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* AI INFO BOX */}
+            <View style={styles.aiBox}>
+              <View style={{flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8}}>
+                <BrainCircuit size={18} color={theme.colors.primary} />
+                <Text style={styles.aiLabel}>Diagnóstico da IA</Text>
+              </View>
+              <Text style={styles.aiText}>
+                {selectedItem.aiStatus === 'critical' 
+                  ? "Risco Crítico: Baseado no histórico, o estoque deve acabar amanhã."
+                  : selectedItem.aiStatus === 'low'
+                  ? "Atenção: Estoque ficará abaixo do mínimo de segurança."
+                  : "Saudável: Estoque suficiente para a demanda prevista."}
+              </Text>
+            </View>
+
+            {/* ESTATÍSTICAS */}
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Atual</Text>
+                <Text style={styles.statValue}>{selectedItem.current}</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Venda Prev.</Text>
+                <Text style={[styles.statValue, {color: theme.colors.primary}]}>
+                  {selectedItem.predictedSales || 0}
+                </Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Est. Final</Text>
+                <Text style={[styles.statValue, {
+                  color: selectedItem.aiStatus === 'critical' ? theme.colors.danger : theme.colors.success
+                }]}>
+                  {selectedItem.projectedStock || 0}
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={loadPredictions}
+            
+            <TouchableOpacity 
+              style={styles.closeBtn} 
+              onPress={() => setSelectedItem(null)}
             >
-              <RefreshCw size={20} color="#9CA3AF" />
+              <Text style={styles.closeBtnText}>Fechar Detalhes</Text>
             </TouchableOpacity>
-          </View>
+
+          </Animated.View>
         </View>
-
-        {/* Resumo da IA */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, { width: width * 0.92 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Calendar size={18} color="#8B5CF6" />
-              <Text style={styles.statLabel}>Previsão para Próximas 24h</Text>
-            </View>
-            <Text style={styles.predictionSummary}>
-              A IA identificou <Text style={{color: '#22C55E'}}>alta demanda</Text> prevista para bebidas.
-              Recomenda-se reposição de estoque imediata.
-            </Text>
-          </View>
-        </View>
-
-        {/* Lista de Previsões */}
-        <View style={styles.listContainer}>
-          <Text style={styles.sectionTitle}>Insights por Produto</Text>
-          
-          {predictions.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <AlertCircle color="#9CA3AF" size={40} />
-              <Text style={styles.emptyText}>Nenhuma previsão gerada.</Text>
-            </View>
-          ) : (
-            predictions.map((item) => (
-              <View key={item.productId} style={styles.predictionCard}>
-                
-                {/* Cabeçalho do Card */}
-                <View style={styles.cardHeader}>
-                  <Text style={styles.productName}>{item.productName}</Text>
-                  <View style={styles.trendContainer}>
-                    {getTrendIcon(item.trend)}
-                    <Text style={[
-                      styles.trendText, 
-                      { color: item.trend === 'up' ? '#22C55E' : item.trend === 'down' ? '#DC2626' : '#EAB308'}
-                    ]}>
-                      {item.trend === 'up' ? 'Alta' : item.trend === 'down' ? 'Baixa' : 'Estável'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Dados Numéricos */}
-                <View style={styles.metricsRow}>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Estoque Atual</Text>
-                    <Text style={styles.metricValue}>{item.currentStock}</Text>
-                  </View>
-                  <View style={styles.metricDivider} />
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Previsão Venda</Text>
-                    <Text style={[styles.metricValue, { color: '#8B5CF6' }]}>
-                      {item.predictedSales}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Barra de Confiança da IA */}
-                <View style={styles.confidenceContainer}>
-                  <View style={styles.confidenceHeader}>
-                    <Text style={styles.confidenceLabel}>Confiança da IA</Text>
-                    <Text style={[styles.confidenceValue, { color: getConfidenceColor(item.confidence) }]}>
-                      {item.confidence}%
-                    </Text>
-                  </View>
-                  <View style={styles.confidenceBarBg}>
-                    <View 
-                      style={[
-                        styles.confidenceBarFill, 
-                        { 
-                          width: `${item.confidence}%`,
-                          backgroundColor: getConfidenceColor(item.confidence)
-                        }
-                      ]} 
-                    />
-                  </View>
-                </View>
-
-                {/* Sugestão de Ação */}
-                <View style={styles.actionContainer}>
-                  <Text style={styles.actionLabel}>Ação Sugerida:</Text>
-                  <Text style={styles.actionText}>{item.suggestedAction}</Text>
-                </View>
-
-              </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
-    </View>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#18181B',
+  container: { flex: 1, backgroundColor: theme.colors.background },
+
+  // HEADER
+  header: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    paddingHorizontal: 20, marginBottom: 20, marginTop: 10
   },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  backBtn: { marginRight: 15, padding: 4 },
+  headerTitle: { fontFamily: theme.fonts.bold, fontSize: 24, color: theme.colors.text },
+  headerSubtitle: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.colors.textSecondary },
+  
+  aiButton: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center', alignItems: 'center',
   },
-  scroll: {
-    flex: 1,
+
+  // SEARCH
+  searchContainer: { paddingHorizontal: 20, marginBottom: 16 },
+  searchBar: { 
+    flexDirection: 'row', alignItems: 'center', 
+    backgroundColor: theme.colors.surface, height: 48, 
+    borderRadius: 12, paddingHorizontal: 16, gap: 12,
+    borderWidth: 1, borderColor: theme.colors.border
   },
-  header: {
-    padding: 24,
-    paddingTop: 60,
-    backgroundColor: '#18181B',
+  searchInput: { flex: 1, fontFamily: theme.fonts.regular, fontSize: 15, color: theme.colors.text },
+
+  // CATEGORIAS
+  catPill: { 
+    paddingHorizontal: 16, paddingVertical: 8, 
+    backgroundColor: theme.colors.surface, borderRadius: 20, 
+    borderWidth: 1, borderColor: theme.colors.border, marginRight: 0 
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+  catPillActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  catText: { fontFamily: theme.fonts.medium, fontSize: 13, color: theme.colors.textSecondary },
+  catTextActive: { color: '#FFF' },
+
+  // LISTA & CARDS
+  listContainer: { paddingHorizontal: 20, paddingBottom: 100 },
+  card: { 
+    backgroundColor: theme.colors.surface, marginBottom: 10, borderRadius: 12, 
+    borderWidth: 1, borderColor: theme.colors.border,
   },
-  backText: {
-    color: '#9CA3AF',
-    marginLeft: 8,
-    fontSize: 16,
+  cardContent: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  cardTitle: { fontFamily: theme.fonts.semiBold, fontSize: 15, color: theme.colors.text },
+  cardSubtitle: { fontFamily: theme.fonts.regular, fontSize: 13, color: theme.colors.textSecondary },
+  stockValue: { fontFamily: theme.fonts.bold, fontSize: 16, color: theme.colors.text },
+  predictionText: { fontFamily: theme.fonts.medium, fontSize: 12 },
+
+  // LOADING & EMPTY
+  centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
+  loadingText: { fontFamily: theme.fonts.medium, color: theme.colors.textSecondary, marginTop: 10 },
+  emptyText: { fontFamily: theme.fonts.medium, color: theme.colors.textSecondary, marginTop: 10 },
+
+  // MODAL
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { 
+    backgroundColor: theme.colors.surface, 
+    borderTopLeftRadius: 24, borderTopRightRadius: 24, 
+    padding: 24, paddingBottom: 40, 
+    borderWidth: 1, borderColor: theme.colors.border 
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  modalTitle: { fontFamily: theme.fonts.bold, fontSize: 20, color: theme.colors.text },
+  modalCategory: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.colors.textSecondary },
+  closeIcon: { padding: 4 },
+  
+  aiBox: { 
+    backgroundColor: theme.colors.background, 
+    padding: 16, borderRadius: 12, marginBottom: 20, 
+    borderWidth: 1, borderColor: theme.colors.border 
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 4,
+  aiLabel: { fontFamily: theme.fonts.semiBold, fontSize: 14, color: theme.colors.primary },
+  aiText: { fontFamily: theme.fonts.regular, fontSize: 14, color: theme.colors.text, lineHeight: 20 },
+  
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  statCard: { 
+    flex: 1, backgroundColor: theme.colors.background, 
+    borderRadius: 12, padding: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: theme.colors.border
   },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  statLabel: { fontFamily: theme.fonts.medium, fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 },
+  statValue: { fontFamily: theme.fonts.bold, fontSize: 18, color: theme.colors.text },
+
+  closeBtn: { 
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12, alignItems: 'center', paddingVertical: 14 
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#C4B5FD', // Roxo claro para remeter a tech/AI
-  },
-  refreshButton: {
-    padding: 8,
-    backgroundColor: '#27272A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-  },
-  loadingText: {
-    color: '#FFF',
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingSubText: {
-    color: '#9CA3AF',
-    marginTop: 4,
-    fontSize: 14,
-  },
-  statsContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  statCard: {
-    backgroundColor: '#27272A',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#8B5CF6', // Borda roxa para destacar a IA
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#8B5CF6',
-    fontWeight: '600',
-  },
-  predictionSummary: {
-    color: '#E4E4E7',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  listContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 40,
-  },
-  emptyText: {
-    color: '#9CA3AF',
-    marginTop: 8,
-    fontSize: 14,
-  },
-  // Cards de Previsão
-  predictionCard: {
-    backgroundColor: '#27272A',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  productName: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-  },
-  trendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  trendText: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    backgroundColor: '#18181B',
-    padding: 12,
-    borderRadius: 8,
-  },
-  metricItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  metricDivider: {
-    width: 1,
-    backgroundColor: '#3F3F46',
-  },
-  metricLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  metricValue: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  confidenceContainer: {
-    marginBottom: 16,
-  },
-  confidenceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  confidenceLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  confidenceValue: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  confidenceBarBg: {
-    height: 6,
-    backgroundColor: '#3F3F46',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  confidenceBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  actionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.1)', // Fundo roxo bem claro
-    padding: 10,
-    borderRadius: 8,
-    gap: 8,
-  },
-  actionLabel: {
-    color: '#8B5CF6',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  actionText: {
-    color: '#C4B5FD',
-    fontSize: 13,
-    flex: 1,
-  },
+  closeBtnText: { fontFamily: theme.fonts.semiBold, color: '#FFF', fontSize: 16 },
 });
