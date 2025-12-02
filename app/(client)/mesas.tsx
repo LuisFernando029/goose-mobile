@@ -29,7 +29,7 @@ interface Mesa {
   reservedBy?: string;
 }
 
-const BASE_URL = "http://192.168.15.68:4000";
+const BASE_URL = "http://10.188.227.122:4000";
 
 export default function ClientMesasScreen() {
   const router = useRouter();

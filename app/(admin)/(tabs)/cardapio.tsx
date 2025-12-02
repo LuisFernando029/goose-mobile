@@ -29,7 +29,7 @@ interface Produto {
 }
 
 // SEU IP
-const BASE_URL = "http://192.168.15.68:4000";
+const BASE_URL = "http://10.188.227.122:4000";
 
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);

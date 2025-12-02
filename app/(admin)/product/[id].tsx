@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // --- CONFIGURAÇÃO ---
 // Use o MESMO IP que está funcionando no seu cardapio.tsx
-const MEU_IP = '192.168.15.68'; 
+const MEU_IP = '10.188.227.122'; 
 const NODE_PORT = '4000';
 const API_URL = `http://${MEU_IP}:${NODE_PORT}`;
 

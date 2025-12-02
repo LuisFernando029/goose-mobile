@@ -27,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 // ------------------------------------------------------------------
 // 1. CONFIGURAÇÕES DE REDE
 // ------------------------------------------------------------------
-const MEU_IP = '192.168.15.68'; // <--- SEU IP
+const MEU_IP = '10.188.227.122'; // <--- SEU IP
 const NODE_PORT = '4000';       
 const ML_PORT = '8000';         
 
