@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { LayoutGrid, Utensils, ShoppingBag, ClipboardList, BarChart3, MapPin } from 'lucide-react-native';
+import { LayoutGrid, Utensils, ShoppingBag, ClipboardList, BarChart3, MapPin, Brain} from 'lucide-react-native';
 
 export default function AdminTabLayout() {
   return (
@@ -53,6 +53,13 @@ export default function AdminTabLayout() {
         options={{
           title: 'Mapa',
           tabBarIcon: ({ color, size }) => <MapPin size={size} color={color} />,
+        }}
+      />
+       <Tabs.Screen
+        name="previsao"
+        options={{
+          title: 'Previsão',
+          tabBarIcon: ({ color, size }) => <Brain size={size} color={color} />,
         }}
       />
     </Tabs>

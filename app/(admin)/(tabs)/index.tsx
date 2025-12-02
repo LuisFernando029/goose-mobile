@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Alert, Image } from 'react-native';
 import { ChefHat, Package, Users, BarChart3, LogOut } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -29,13 +29,6 @@ export default function AdminHomeScreen() {
       icon: ChefHat,
       route: '/pedidos',
       color: '#059669'
-    },
-    {
-      title: 'Histórico',
-      description: 'Clientes e relatórios',
-      icon: BarChart3,
-      route: '/explore',
-      color: '#7C3AED'
     },
   ];
 
@@ -79,12 +72,17 @@ export default function AdminHomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <View style={styles.logoPlaceholder}>
-              <Text style={styles.logoText}>🍷 CAPONE</Text>
-            </View>
+            {/* Substituí o texto pela Imagem */}
+            <Image 
+              source={require('assets/images/fedora.png')} 
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
-          <Text style={styles.welcome}>Bem-vindo, Admin!</Text>
-          <Text style={styles.subtitle}>Gestão do estabelecimento</Text>
+          <View>
+            <Text style={styles.welcome}>Bem-vindo, Admin!</Text>
+            <Text style={styles.subtitle}>Gestão do estabelecimento</Text>
+          </View>
         </View>
 
         {/* Menu Grid */}
@@ -173,18 +171,25 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
   },
+  
   menuGrid: {
     padding: 16,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'center', // Centraliza os itens no meio da tela
+    gap: 16, // Espaçamento entre os cartões
+  },
+  logoImage: {
+    width: 120,
+    height: 120,
+    tintColor: 'white',
   },
   menuCard: {
-    width: width * 0.44,
+    width: width * 0.43, // Ajustei levemente a largura para caber bem com o gap
     backgroundColor: '#27272A',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    // marginBottom removido pois estamos usando gap
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#3F3F46',
